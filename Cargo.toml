@@ -1,0 +1,12 @@
+[package]
+name = "rust_ps_drone"
+version = "0.1.0"
+authors = ["VaranTavers <tasnadi98@freemail.hu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+opencv = "^0.29"
+timer = "^0.2.0"
+chrono = "^0.4.10"
