@@ -10,9 +10,9 @@ pub struct InternalConfig {
     /// Should the drone land when there is a communication problem
     pub stop_on_com_loss: bool,
     /// Default drone speed in percent
-    pub speed: f64,
+    pub speed: f32,
     pub value_correction: bool,
-    pub self_rotation: f64,
+    pub self_rotation: f32,
     pub navdata_process: String,
     pub video_process: String,
     pub v_decode_process: String,
