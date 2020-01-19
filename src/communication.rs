@@ -1,7 +1,8 @@
-use std::io::prelude::*;
 use std::net::TcpStream;
+use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
 use std::{time, thread};
+use std::sync::mpsc::{self, TryRecvError, Sender, Receiver};
 
 pub struct Communication {
     pub drone_ip: String,
@@ -9,9 +10,9 @@ pub struct Communication {
     pub video_port: u32,
     pub cmd_port: u32,
     pub ctl_port: u32,
-    command_stream: Option<TcpStream>,
     command_list: Arc<Mutex<Vec<(String, Vec<String>)>>>,
     connection_thread: Option<thread::JoinHandle<()>>,
+    thread_terminator: Option<Sender<i32>>
 }
 
 
@@ -22,26 +23,55 @@ pub fn get_default_settings() -> Communication {
         video_port: 5555,
         cmd_port: 5556,
         ctl_port: 5559,
-        command_stream: None,
         command_list: Arc::new(Mutex::new(Vec::new())),
         connection_thread: None,
+        thread_terminator: None
     };
 }
 
-fn communication_thread(command_stream: Option<TcpStream>, 
-                        command_list: Arc<Mutex<Vec<(String, Vec<String>)>>>) {
-    let mut stream = command_stream.unwrap();
-    let mut cmd_count = 0;
+pub fn format_int(num: i32) -> String {
+    format!("{}", num)
+}
+
+pub fn format_float(num: f32) -> String {
+    format!("{}", num.to_bits())
+}
+
+pub fn format_string(s: &str) -> String {
+    format!("\"{}\"", s)
+}
+
+pub fn format_command(
+    command_num: usize,
+    command: String,
+    params: Vec<String>) -> String {
+    let command = params.iter().fold(format!("AT*{}={}", command, command_num), 
+                                     |acc, value| format!("{},{}", acc, value));
+    format!("{}\r", command)
+}
+
+fn communication_thread(socket: UdpSocket, 
+                        command_list: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+                        receiver: Receiver<i32>,
+                        address: String) {
+    let mut cmd_count = 3;
     loop {
+        match receiver.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => {
+                println!("Terminating.");
+                break;
+            }
+            Err(TryRecvError::Empty) => {}
+        }
         let mut cmd_list = command_list.lock().unwrap();
-        let mut s = String::new();
+        let s;
         if cmd_list.len() > 0 {
             let (cmd_str, params) = cmd_list.pop().unwrap();
             s = format_command(cmd_count, cmd_str, params);
         } else {
             s = format_command(cmd_count, String::from("COMWDG"), Vec::new());
         }
-        stream.write(s.as_bytes()); 
+        socket.send_to(s.as_bytes(), &address).unwrap(); 
         cmd_count += 1;
         drop(cmd_list); // We release the lock
         thread::sleep(time::Duration::from_millis(100));
@@ -50,9 +80,9 @@ fn communication_thread(command_stream: Option<TcpStream>,
 
 impl Communication {
     pub fn try_connection(&self) -> bool {
-        let stream = TcpStream::connect(format!("{}:{}", self.drone_ip, 21)); 
+        let socket = TcpStream::connect(format!("{}:{}", self.drone_ip, 21)); 
 
-        match stream {
+        match socket {
             Ok(_) => {
                 return true;
             }
@@ -70,18 +100,36 @@ impl Communication {
     }
 
     pub fn start_connection(&mut self) -> Result<(), String> {
-        let connect = TcpStream::connect(format!("{}:{}", self.drone_ip, self.cmd_port));
-        match connect {
-            Ok(stream) => {
-                self.connection_thread = Some(thread::spawn(|| {
-                    communication_thread(Some(stream), Arc::new(Mutex::new(Vec::new())));
-                }));
-                return Ok(());
-            }
-            Err(_) => {
-                return Err(String::from("Connection failed!"));
-            }
-        }
+        let socket = UdpSocket::bind("0.0.0.0:5556").expect("couldn't bind to address");
+        socket.set_nonblocking(true).unwrap();
+        let address = format!("{}:{}", self.drone_ip, self.cmd_port);
+
+        // Creating a channel to kill the thread
+        let (sender, receiver) = mpsc::channel();
+        self.thread_terminator = Some(sender);
+
+        // Sending first two commands
+        let s = String::from("\r");
+        socket.send_to(s.as_bytes(), &address).unwrap();
+        thread::sleep(time::Duration::from_millis(10));
+        let s = String::from("AT*PMODE=1,2\rAT*MISC=2,2,20,2000,3000\r");
+        socket.send_to(s.as_bytes(), &address).unwrap();
+
+        self.connection_thread = Some(thread::spawn(|| {
+            communication_thread(socket,
+                                 Arc::new(Mutex::new(Vec::new())),
+                                 receiver,
+                                 address);
+        }));
+        return Ok(());
+    }
+
+    pub fn shutdown_connection(mut self) {
+        let sender = self.thread_terminator.unwrap();
+        sender.send(1).unwrap();
+        self.connection_thread.take().unwrap().join().unwrap();
+        self.thread_terminator = None;
+        self.connection_thread = None;
     }
 
 }

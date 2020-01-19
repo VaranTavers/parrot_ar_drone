@@ -24,12 +24,44 @@ pub fn get_drone() -> Drone {
 }
 
 impl Drone {
-    fn startup(&self) -> Result<(), String> {
+    pub fn startup(&mut self) -> Result<(), String> {
         if !self.communication.try_connection() {
             return Err(String::from("Drone is not online!"));
         }
-        // rest of startup
-        Ok(())
+        match self.communication.start_connection() {
+            Ok(()) => { return Ok(()); }
+            Err(s) => { return Err(s); }
+        }
     }
 
+    pub fn test_led(&mut self) {
+        self.communication.command("LED", vec![String::from("2"), String::from("1065353216"), String::from("10")]);
+    }
+
+    pub fn shutdown(self) {
+        self.communication.shutdown_connection();
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{time, thread};
+
+    #[test]
+    fn test_connect() {
+        let mut drone = get_drone();
+        let test_result = drone.startup();
+        match test_result {
+            Ok(()) => {
+                thread::sleep(time::Duration::from_secs(2));
+                drone.test_led();
+                thread::sleep(time::Duration::from_secs(5));
+                drone.shutdown();
+            }
+            _ => {}
+        }
+        assert_eq!(test_result, Ok(()));
+    }
 }
