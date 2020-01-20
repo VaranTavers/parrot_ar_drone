@@ -31,7 +31,7 @@ impl Drone {
         if !self.communication.try_connection() {
             return Err(String::from("Drone is not online!"));
         }
-        match self.communication.start_connection() {
+        match self.communication.start_connection(&self.i_config.show_commands) {
             Ok(()) => { return Ok(()); }
             Err(s) => { return Err(s); }
         }
@@ -254,6 +254,19 @@ impl Drone {
                                        format_int(duration)]);
         }
     }
+
+    pub fn set_speed(&mut self, speed: f32) {
+        if speed.abs() > 1.0 {
+            self.i_config.speed = 1.0;
+        } else {
+            self.i_config.speed = speed.abs();
+        }
+    }
+    
+    pub fn get_config(&mut self) {
+        self.communication.command_str("CTRL", vec!["5", "0"]);
+        self.communication.command_str("CTRL", vec!["4", "0"]);
+    }
 }
 
 #[cfg(test)]
@@ -267,6 +280,9 @@ mod tests {
         let test_result = drone.startup();
         match test_result {
             Ok(()) => {
+                drone.takeoff();
+                thread::sleep(time::Duration::from_secs(5));
+                drone.land();
                 thread::sleep(time::Duration::from_secs(5));
                 drone.shutdown();
             }
