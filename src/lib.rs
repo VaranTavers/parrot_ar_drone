@@ -7,6 +7,16 @@ mod format;
 
 use format::*;
 
+/// First is the codec used for streaming on UDP 5555, second (if exists) is for
+/// recording on TCP 5553.
+pub enum VideoCodec {
+    MP4_360p,
+    H264_360p,
+    MP4_360pH264_720p,
+    MP4_360pH264_360p,
+    H264_720p,
+}
+
 pub struct Drone {
     communication: communication::Communication,
     navdata: navdata::NavData,
@@ -32,12 +42,22 @@ impl Drone {
             return Err(String::from("Drone is not online!"));
         }
         match self.communication.start_connection(&self.i_config.show_commands) {
-            Ok(()) => { return Ok(()); }
+            Ok(()) => { }
             Err(s) => { return Err(s); }
         }
+        match self.communication.get_ctl_tcp_connection() {
+            Ok(stream) => { self.config.start_config_listening_thread(stream); }
+            Err(s) => { return Err(s); }
+        }
+
+        // Is necessary in order to get full NavData back
+        self.use_demo_mode(true);
+        self.set_config_str("custom:session_id", "-all");
+        Ok(())
     }
 
     pub fn shutdown(self) {
+        self.config.stop_config_listening_thread();
         self.communication.shutdown_connection();
     }
 
@@ -92,7 +112,7 @@ impl Drone {
                                    format_float(t_l_r)
                                    ]);
     }
-    
+
     /// Move relative to the controller
     pub fn rel_mov(&mut self, left_right: f32, back_front: f32, down_up: f32, turn_left_right: f32, east_west: f32, north_ta_accuracy: f32) {
         let mut l_r = left_right;
@@ -136,7 +156,7 @@ impl Drone {
     pub fn hover(&mut self) {
         self.mov(0.0, 0.0, 0.0, 0.0);
     }
-    
+
     /// Same a hover
     pub fn stop(&mut self) {
         self.hover();
@@ -153,31 +173,31 @@ impl Drone {
     pub fn mov_left(&mut self, speed: f32) {
         self.mov(-speed, 0.0, 0.0, 0.0);
     }
-    
+
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
     /// If you want to use the drones default speed use move_forward()
     pub fn mov_forward(&mut self, speed: f32) {
         self.mov(0.0, speed, 0.0, 0.0);
     }
-    
+
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
     /// If you want to use the drones default speed use move_backward()
     pub fn mov_backward(&mut self, speed: f32) {
         self.mov(0.0, -speed, 0.0, 0.0);
     }
-    
+
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
     /// If you want to use the drones default speed use move_up()
     pub fn mov_up(&mut self, speed: f32) {
         self.mov(0.0, 0.0, speed, 0.0);
     }
-    
+
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
     /// If you want to use the drones default speed use move_down()
     pub fn mov_down(&mut self, speed: f32) {
         self.mov(0.0, 0.0, -speed, 0.0);
     }
-    
+
     /// This method uses the drones default speed
     /// If you want to give an explicit speed use move_right()
     pub fn move_right(&mut self) {
@@ -195,19 +215,19 @@ impl Drone {
     pub fn move_forward(&mut self) {
         self.mov(0.0, self.i_config.speed, 0.0, 0.0);
     }
-    
+
     /// This method uses the drones default speed
     /// If you want to give an explicit speed use mov_left()
     pub fn move_backward(&mut self) {
         self.mov(0.0, -self.i_config.speed, 0.0, 0.0);
     }
-    
+
     /// This method uses the drones default speed
     /// If you want to give an explicit speed use mov_left()
     pub fn move_up(&mut self) {
         self.mov(0.0, 0.0, self.i_config.speed, 0.0);
     }
-    
+
     /// This method uses the drones default speed
     /// If you want to give an explicit speed use mov_left()
     pub fn move_down(&mut self) {
@@ -236,6 +256,12 @@ impl Drone {
         self.communication.command("REF", vec![String::from("290717696")]);
     }
 
+    /// Message conforms SDK documentation
+    /// 290717952=10001010101000000000100000000
+    pub fn reset(&mut self) {
+        self.communication.command("REF", vec![String::from("290717952")]);
+    }
+
     /// Do a preset led animation (anim < 21; duration in seconds)
     pub fn led(&mut self, anim: usize, frequency: f32, duration: i32) {
         if anim < 21 && frequency > 0.0 && duration > 0 {
@@ -245,7 +271,7 @@ impl Drone {
                                        format_int(duration)]);
         }
     }
-    
+
     /// Execute a preset movement (anim < 20; duration in seconds)
     pub fn anim(&mut self, anim: usize, duration: i32) {
         if anim < 20 && duration > 0 {
@@ -255,6 +281,48 @@ impl Drone {
         }
     }
 
+    /// Control engines thrust manually (could be potentially dangerous)
+    ///
+    /// Parameters in order are: front-left, front-right, rear-left, rear-right
+    ///
+    /// All values should be between in [0, 1023], use at
+    pub fn manual_engine(&mut self, fl: u32, fr: u32, rl: u32, rr: u32) {
+       let mut fl = fl; 
+       if fl > 1023 {
+            fl = 1023;
+       }
+       let mut fr = fr; 
+       if fr > 1023 {
+            fr = 1023;
+       }
+       let mut rl = rl; 
+       if rl > 1023 {
+            rl = 1023;
+       }
+       let mut rr = rr; 
+       if rr > 1023 {
+            rr = 1023;
+       }
+
+       self.communication.command("PWM", vec![
+            format_int(fl as i32),
+            format_int(fr as i32),
+            format_int(rl as i32),
+            format_int(rr as i32)
+       ])
+    }
+
+    /// This makes the drone fly around and follow 2D tags detected by it's camera
+    pub fn aflight(&mut self, flag: bool) {
+        if flag {
+            self.communication.command_str("AFLIGHT", vec!["1"]);
+        } else {
+            self.communication.command_str("AFLIGHT", vec!["0"]);
+        }
+    }
+
+    /// Set the default seed of the drone that will be used in the move functions.
+    /// This value should be in the [0, 1.0] range 
     pub fn set_speed(&mut self, speed: f32) {
         if speed.abs() > 1.0 {
             self.i_config.speed = 1.0;
@@ -262,10 +330,139 @@ impl Drone {
             self.i_config.speed = speed.abs();
         }
     }
-    
-    pub fn get_config(&mut self) {
+
+    /// Requests an updated config from the drone
+    pub fn update_config(&mut self) {
         self.communication.command_str("CTRL", vec!["5", "0"]);
         self.communication.command_str("CTRL", vec!["4", "0"]);
+    }
+
+    /// This function doesn't guarantee that the config read is up to date!
+    /// To be sure please use the update_config function before this and
+    /// wait a little, to give time to the config thread to process the changes
+    pub fn get_offline_config(self, config_name: &str) -> Option<String> {
+        self.config.get_config_str(config_name)
+    }
+
+    pub fn send_config_ids(&mut self) {
+        self.communication.command("CONFIG_IDS",
+                                   vec![
+                                   format_string(self.config.session_id.clone()),
+                                   format_string(self.config.user_id.clone()),
+                                   format_string(self.config.application_id.clone()),
+                                   ]);
+    }
+
+    /// This function sends a config to the drone, however it does not check if
+    /// the drone has gotten the command or not.
+    pub fn set_config(&mut self, config_name: &str, config_value: String) {
+        self.send_config_ids();
+        self.communication.command("CONFIG",
+                                   vec![
+                                   format!("\"{}\"", config_name),
+                                   format!("\"{}\"", config_value)
+                                   ]);
+    }
+    
+    /// Same as set_config but this uses &str for config_value
+    pub fn set_config_str(&mut self, config_name: &str, config_value: &str) {
+        self.send_config_ids();
+        self.communication.command("CONFIG",
+                                   vec![
+                                   format!("\"{}\"", config_name),
+                                   format!("\"{}\"", config_value)
+                                   ]);
+    }
+
+    /// Enters the drone into demo mode
+    pub fn use_demo_mode(&mut self, value: bool) {
+        if value {
+            self.set_config_str("general:navdata_demo", "TRUE");
+        } else {
+            self.set_config_str("general:navdata_demo", "FALSE");
+        }
+    }
+
+    /// Sets the codec that will be used by the drone for streaming and recording.
+    pub fn set_video_codec(&mut self, codec: VideoCodec) {
+        let s;
+        match codec { 
+            VideoCodec::MP4_360p => {
+                s = "128";
+            }
+            VideoCodec::H264_360p => {
+                s = "129";
+            }
+            VideoCodec::H264_720p => {
+                s = "131";
+            }
+            VideoCodec::MP4_360pH264_720p => {
+                s = "130";
+            }
+            VideoCodec::MP4_360pH264_360p => {
+                s = "136";
+            }
+        }
+
+        self.set_config_str("video:video_codec", s);
+    }
+
+    /// Stream (UDP 5555) will be in HD (H264_720p) and there will be nothing
+    /// sent to the recording port (TCP 5553)
+    pub fn set_hd_video_stream(&mut self) {
+        self.set_video_codec(VideoCodec::H264_720p);
+    }
+    
+    /// Stream (UDP 5555) will be in SD (H264_360p) and there will be nothing
+    /// sent to the recording port (TCP 5553)
+    pub fn set_sd_video_stream(&mut self) {
+        self.set_video_codec(VideoCodec::H264_360p);
+    }
+    
+    /// Stream (UDP 5555) will be in SD (MP4_360p) and there will be nothing
+    /// sent to the recording port (TCP 5553)
+    pub fn set_mp4_video_stream(&mut self) {
+        self.set_video_codec(VideoCodec::MP4_360p);
+    }
+
+    /// Stream (UDP 5555) will be in SD (MP4_360p) and a HD (H264_720p) capture 
+    /// will be sent to the recording port (TCP 5553)
+    pub fn set_hd_video_capture(&mut self) {
+        self.set_video_codec(VideoCodec::MP4_360pH264_720p);
+    }
+    
+    /// Stream (UDP 5555) will be in SD (MP4_360p) and a SD (H264_360p) capture 
+    /// will be sent to the recording port (TCP 5553)
+    pub fn set_sd_video_capture(&mut self) {
+        self.set_video_codec(VideoCodec::MP4_360pH264_360p);
+    }
+
+    /// Set the FPS for the video on (UDP 5555)
+    pub fn set_video_fps(&mut self, fps: u32) {
+        let mut real_fps = fps;
+        if fps > 60 || fps == 0 {
+            real_fps = 60;
+        }
+        self.set_config("video:codec_fps", format!("{}", real_fps));
+    }
+
+    /// Set the FPS for the video on (UDP 5555)
+    pub fn set_video_bitrate(&mut self, bitrate: u32) {
+        let mut real_bitrate = bitrate;
+        if bitrate > 20000 {
+            real_bitrate = 20000;
+        } else if bitrate < 250 {
+            real_bitrate = 250;
+        }
+        self.set_config("video:bitrate", format!("{}", real_bitrate));
+    }
+
+    pub fn use_front_cam(&mut self) {
+        self.set_config_str("video:video_channel", "0");
+    }
+    
+    pub fn use_ground_cam(&mut self) {
+        self.set_config_str("video:video_channel", "1");
     }
 }
 

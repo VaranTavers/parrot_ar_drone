@@ -140,7 +140,6 @@ impl Communication {
         }
         socket.send_to(s.as_bytes(), &address).unwrap();
 
-        // TODO: check if this actually works (move should be bad)
         self.connection_thread = Some(thread::spawn(move || {
             communication_thread(socket,
                                  receiver,
@@ -154,9 +153,21 @@ impl Communication {
     pub fn shutdown_connection(mut self) {
         let sender = self.command_channel.unwrap();
         sender.send((String::from("exit"), Vec::new())).unwrap();
-        self.connection_thread.take().unwrap().join().unwrap();
         self.command_channel = None;
+        self.connection_thread.take().unwrap().join().unwrap();
         self.connection_thread = None;
+    }
+
+    pub fn get_ctl_tcp_connection(&self) -> Result<TcpStream, String> {
+        let socket = TcpStream::connect(format!("{}:{}", self.drone_ip, self.ctl_port)) ;
+        match socket {
+            Ok(stream) => {
+                return Ok(stream);
+            }
+            Err(error) => {
+                return Err(format!("{}", error));
+            }
+        }
     }
 
 }
