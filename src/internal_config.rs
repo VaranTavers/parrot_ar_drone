@@ -26,8 +26,8 @@ pub fn get_default_settings() -> InternalConfig {
     return InternalConfig {
         version: String::from("0.0.1 (2.1.4)"),
         start_time: SystemTime::now(),
-        show_commands: false,
-        debug: false,
+        show_commands: true,
+        debug: true,
         stop_on_com_loss: false,
         speed: 0.2,
         value_correction: false,

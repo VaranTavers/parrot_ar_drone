@@ -17,7 +17,11 @@ pub struct Communication {
     pub cmd_port: u32,
     /// TCP port (default 5559) from which we get config information
     pub ctl_port: u32,
+    /// TCP port (default 5553) from which we get the recording
+    pub rec_port: u32,
+    /// The join handle of the command sender thread, set to None when initializing
     connection_thread: Option<thread::JoinHandle<()>>,
+    /// Sender to the command sender thread, set to None when initializing
     command_channel: Option<Sender<(String, Vec<String>)>>
 }
 
@@ -31,6 +35,7 @@ pub fn get_default_settings() -> Communication {
         video_port: 5555,
         cmd_port: 5556,
         ctl_port: 5559,
+        rec_port: 5553,
         connection_thread: None,
         command_channel: None
     };
@@ -121,7 +126,7 @@ impl Communication {
     /// thread to deal with sending these commands and the keepalive sign.
     /// Parameters: echo_commands: Should it print every command sent? (except keepalives)
     pub fn start_connection(&mut self, echo_commands: &bool) -> Result<(), String> {
-        let socket = UdpSocket::bind("0.0.0.0:5556").expect("couldn't bind to address");
+        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.cmd_port)).expect("couldn't bind to address");
         socket.set_nonblocking(true).unwrap();
         let address = format!("{}:{}", self.drone_ip, self.cmd_port);
 
@@ -160,6 +165,48 @@ impl Communication {
 
     pub fn get_ctl_tcp_connection(&self) -> Result<TcpStream, String> {
         let socket = TcpStream::connect(format!("{}:{}", self.drone_ip, self.ctl_port)) ;
+        match socket {
+            Ok(stream) => {
+                return Ok(stream);
+            }
+            Err(error) => {
+                return Err(format!("{}", error));
+            }
+        }
+    }
+    
+    pub fn get_navdata_udp_connection(&self) -> Result<UdpSocket, String> {
+        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.nav_data_port))
+            .expect("couldn't bind to address");
+        socket.set_nonblocking(true).unwrap();
+
+        match socket.connect(format!("{}:{}", self.drone_ip, self.nav_data_port)) {
+            Ok(_) => {
+                Ok(socket)
+            }
+            Err(err) => {
+                Err(format!("{}", err))
+            }
+        }
+    }
+    
+    pub fn get_video_udp_connection(&self) -> Result<UdpSocket, String> {
+        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.video_port))
+            .expect("couldn't bind to address");
+        socket.set_nonblocking(true).unwrap();
+
+        match socket.connect(format!("{}:{}", self.drone_ip, self.nav_data_port)) {
+            Ok(_) => {
+                Ok(socket)
+            }
+            Err(err) => {
+                Err(format!("{}", err))
+            }
+        }
+    }
+    
+    pub fn get_record_tcp_connection(&self) -> Result<TcpStream, String> {
+        let socket = TcpStream::connect(format!("{}:{}", self.drone_ip, self.rec_port)) ;
         match socket {
             Ok(stream) => {
                 return Ok(stream);

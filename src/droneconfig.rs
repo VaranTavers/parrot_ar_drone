@@ -73,15 +73,21 @@ fn get_config_thread(op_stream: Option<TcpStream>,
 }
 
 impl DroneConfig {
-    pub fn get_config(self, name: String) -> Option<String> {
-        self.command_sender.unwrap().send(name).unwrap();
-        match self.result_receiver.unwrap().recv() {
+    pub fn get_config(&mut self, name: String) -> Option<String> {
+        let cmd_sender = self.command_sender.take().unwrap();
+        cmd_sender.send(name).unwrap();
+        self.command_sender.replace(cmd_sender);
+
+        let res_rec = self.result_receiver.take().unwrap();
+        let recv_res = res_rec.recv();
+        self.result_receiver.replace(res_rec);
+        match recv_res {
             Ok(res) => { res }
             _ => { None }
         }
     }
 
-    pub fn get_config_str(self, name: &str) -> Option<String> {
+    pub fn get_config_str(&mut self, name: &str) -> Option<String> {
         self.get_config(String::from(name))
     }
 

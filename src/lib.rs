@@ -1,11 +1,12 @@
 mod communication;
-mod video;
 mod navdata;
 mod droneconfig;
 mod internal_config;
 mod format;
 
-use format::*;
+pub use format::*;
+pub use communication::*;
+pub use internal_config::*;
 
 /// First is the codec used for streaming on UDP 5555, second (if exists) is for
 /// recording on TCP 5553.
@@ -20,16 +21,13 @@ pub enum VideoCodec {
 pub struct Drone {
     communication: communication::Communication,
     navdata: navdata::NavData,
-    video: video::Video,
     config: droneconfig::DroneConfig,
     i_config: internal_config::InternalConfig,
-
 }
 
 pub fn get_drone() -> Drone {
     return Drone {
         communication: communication::get_default_settings(),
-        video: video::get_default_settings(),
         navdata: navdata::get_default_settings(),
         config: droneconfig::get_default_settings(),
         i_config: internal_config::get_default_settings(),
@@ -53,10 +51,17 @@ impl Drone {
         // Is necessary in order to get full NavData back
         self.use_demo_mode(true);
         self.set_config_str("custom:session_id", "-all");
+
+        match self.communication.get_navdata_udp_connection() {
+            Ok(stream) => { self.navdata.start_navdata_listening_thread(stream, self.i_config.debug)}
+            Err(s) => { return Err(s); }
+        }
+
         Ok(())
     }
 
     pub fn shutdown(self) {
+        self.navdata.stop_navdata_listening_thread();
         self.config.stop_config_listening_thread();
         self.communication.shutdown_connection();
     }
@@ -340,7 +345,7 @@ impl Drone {
     /// This function doesn't guarantee that the config read is up to date!
     /// To be sure please use the update_config function before this and
     /// wait a little, to give time to the config thread to process the changes
-    pub fn get_offline_config(self, config_name: &str) -> Option<String> {
+    pub fn get_offline_config(&mut self, config_name: &str) -> Option<String> {
         self.config.get_config_str(config_name)
     }
 
@@ -457,31 +462,80 @@ impl Drone {
         self.set_config("video:bitrate", format!("{}", real_bitrate));
     }
 
+    /// Tells the drone to use it's front cam, for recording and streaming
     pub fn use_front_cam(&mut self) {
         self.set_config_str("video:video_channel", "0");
     }
     
+    /// Tells the drone to use it's ground cam, for recording and streaming
     pub fn use_ground_cam(&mut self) {
         self.set_config_str("video:video_channel", "1");
+    }
+    
+    /// Get Navdata from the drone (currently only supports DEMO mode)
+    pub fn get_navdata(&mut self, name: &str) -> Option<navdata::NavDataValue> {
+        self.navdata.get_navdata_str(name)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ncurses::*;
+    use navdata::NavDataValue;
     use std::{time, thread};
 
     #[test]
     fn test_connect() {
         let mut drone = get_drone();
         let test_result = drone.startup();
+        thread::sleep(time::Duration::from_secs(3));
+        drone.trim();
         match test_result {
             Ok(()) => {
-                drone.takeoff();
-                thread::sleep(time::Duration::from_secs(5));
-                drone.land();
-                thread::sleep(time::Duration::from_secs(5));
+                initscr();
+                println!("Drone connection successful.");
+                match drone.get_navdata("demo_battery") {
+                    Some(NavDataValue::Uint(a)) => { println!("Battery: {}%", a); }
+                    _ => { println!("Battery unkown!"); }
+                }
+                let mut in_air = false;
+                let mut i = 0;
+                loop {
+                    println!("Command nr. {}", i);
+                    i += 1;
+                    let ch = getch();
+                    if ch == 't' as i32 {
+                        if !in_air {
+                            drone.takeoff();
+                        } else {
+                            drone.land();
+                        }
+                        in_air = !in_air;
+                    } else if ch == 'w' as i32 {
+                        drone.mov_forward(0.3);
+                    } else if ch == 'a' as i32 {
+                        drone.mov_left(0.3);
+                    } else if ch == 'd' as i32 {
+                        drone.mov_right(0.3);
+                    } else if ch == 's' as i32 {
+                        drone.mov_backward(0.3);
+                    } else if ch == 'h' as i32 {
+                        drone.hover();
+                    } else if ch == 'q' as i32 {
+                        drone.turn_left(0.3);
+                    } else if ch == 'e' as i32 {
+                        drone.turn_right(0.3);
+                    } else if ch == 'y' as i32 {
+                        drone.mov_up(0.3);
+                    } else if ch == 'x' as i32 {
+                        drone.mov_down(0.3);
+                    } else if ch == 'p' as i32 {
+                        break;
+                    }
+                }
                 drone.shutdown();
+                endwin();
             }
             _ => {}
         }
