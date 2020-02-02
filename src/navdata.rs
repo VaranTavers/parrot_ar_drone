@@ -81,8 +81,8 @@ fn decode_id0<'a, I: AsRef<[u8]>>(crs: &mut Cursor<I>,
     options_map.insert(String::from("demo_phi"),NavDataValue::Float(phi));
     options_map.insert(String::from("demo_psi"),NavDataValue::Float(psi));
 
-    let altitude = crs.read_i32::<LittleEndian>().unwrap();
-    options_map.insert(String::from("demo_altitude"),NavDataValue::Int(altitude / 10));
+    let altitude = crs.read_i32::<LittleEndian>().unwrap() / 10;
+    options_map.insert(String::from("demo_altitude"),NavDataValue::Int(altitude));
 
     let vx = crs.read_f32::<LittleEndian>().unwrap();
     let vy = crs.read_f32::<LittleEndian>().unwrap();
@@ -125,9 +125,9 @@ fn get_navdata_thread(op_stream: Option<UdpSocket>,
     let stream = op_stream.unwrap();
     let mut options: HashMap<String, NavDataValue> = HashMap::new();
 
-    let tmp = "Hello";
+    let tmp = [1 as u8, 0 as u8, 0 as u8, 0 as u8];
     let mut seq_num = 0;
-    stream.send(&tmp.as_bytes()).unwrap();
+    stream.send(&tmp).unwrap();
     loop {
         match command_receiver.try_recv() {
             Ok(option_name) => {
@@ -171,6 +171,7 @@ fn get_navdata_thread(op_stream: Option<UdpSocket>,
                                 let _tmp = crs.read_u8().unwrap();
                                 size -= 8;
                             }
+                            break;
                         }
 
                     }

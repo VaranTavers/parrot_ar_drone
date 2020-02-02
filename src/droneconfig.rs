@@ -57,6 +57,7 @@ fn get_config_thread(op_stream: Option<TcpStream>,
         let read_result = stream.read_to_string(&mut buffer);
         match read_result {
             Ok(_) => {
+                println!("Read anything.");
                 let commands = buffer.split("\n")
                     .map(|s| String::from(s))
                     .collect::<Vec<String>>();

@@ -48,14 +48,18 @@ impl Drone {
             Err(s) => { return Err(s); }
         }
 
-        // Is necessary in order to get full NavData back
-        self.use_demo_mode(true);
-        self.set_config_str("custom:session_id", "-all");
-
         match self.communication.get_navdata_udp_connection() {
             Ok(stream) => { self.navdata.start_navdata_listening_thread(stream, self.i_config.debug)}
             Err(s) => { return Err(s); }
         }
+
+        // Is necessary in order to get full NavData back
+        self.use_demo_mode(true);
+        self.communication.command_str("CTRL", vec!["5", "0"]);
+        self.set_config_str("custom:session_id", "-all");
+
+        self.communication.command_str("CTRL", vec!["5", "0"]);
+        self.update_config();
 
         Ok(())
     }
@@ -361,7 +365,7 @@ impl Drone {
     /// This function sends a config to the drone, however it does not check if
     /// the drone has gotten the command or not.
     pub fn set_config(&mut self, config_name: &str, config_value: String) {
-        self.send_config_ids();
+        // self.send_config_ids();
         self.communication.command("CONFIG",
                                    vec![
                                    format!("\"{}\"", config_name),
@@ -371,7 +375,7 @@ impl Drone {
     
     /// Same as set_config but this uses &str for config_value
     pub fn set_config_str(&mut self, config_name: &str, config_value: &str) {
-        self.send_config_ids();
+        // self.send_config_ids();
         self.communication.command("CONFIG",
                                    vec![
                                    format!("\"{}\"", config_name),
@@ -487,53 +491,37 @@ mod tests {
 
     #[test]
     fn test_connect() {
+        println!("HEY!!");
         let mut drone = get_drone();
         let test_result = drone.startup();
         thread::sleep(time::Duration::from_secs(3));
         drone.trim();
         match test_result {
             Ok(()) => {
-                initscr();
                 println!("Drone connection successful.");
-                match drone.get_navdata("demo_battery") {
-                    Some(NavDataValue::Uint(a)) => { println!("Battery: {}%", a); }
-                    _ => { println!("Battery unkown!"); }
-                }
-                let mut in_air = false;
                 let mut i = 0;
+                drone.takeoff();
                 loop {
-                    println!("Command nr. {}", i);
+                    thread::sleep(time::Duration::from_secs(1));
+                    match drone.get_navdata("demo_battery") {
+                        Some(NavDataValue::Uint(a)) => { println!("Battery: {}%", a); }
+                        _ => { println!("Battery status unknown!"); }
+                    }
+                    match drone.get_navdata("header_seq_num") {
+                        Some(NavDataValue::Uint(a)) => { println!("Seq num: {}", a); }
+                        _ => { println!("Seq num unknown!"); }
+                    }
+                    
+                    match drone.get_navdata("demo_altitude") {
+                        Some(NavDataValue::Int(a)) => { println!("Alt: {}", a); }
+                        _ => { println!("Altitude unknown!"); }
+                    }
                     i += 1;
-                    let ch = getch();
-                    if ch == 't' as i32 {
-                        if !in_air {
-                            drone.takeoff();
-                        } else {
-                            drone.land();
-                        }
-                        in_air = !in_air;
-                    } else if ch == 'w' as i32 {
-                        drone.mov_forward(0.3);
-                    } else if ch == 'a' as i32 {
-                        drone.mov_left(0.3);
-                    } else if ch == 'd' as i32 {
-                        drone.mov_right(0.3);
-                    } else if ch == 's' as i32 {
-                        drone.mov_backward(0.3);
-                    } else if ch == 'h' as i32 {
-                        drone.hover();
-                    } else if ch == 'q' as i32 {
-                        drone.turn_left(0.3);
-                    } else if ch == 'e' as i32 {
-                        drone.turn_right(0.3);
-                    } else if ch == 'y' as i32 {
-                        drone.mov_up(0.3);
-                    } else if ch == 'x' as i32 {
-                        drone.mov_down(0.3);
-                    } else if ch == 'p' as i32 {
+                    if i == 10 {
                         break;
                     }
                 }
+                drone.land();
                 drone.shutdown();
                 endwin();
             }
