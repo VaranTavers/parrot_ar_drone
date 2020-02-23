@@ -218,11 +218,9 @@ impl NavData {
         }));
     }
 
-    pub fn stop_navdata_listening_thread(mut self) {
-        self.command_sender.unwrap().send(String::from("exit")).unwrap();
-        self.command_sender = None;
-        self.result_receiver = None;
+    pub fn stop_navdata_listening_thread(&mut self) {
+        self.command_sender.take().unwrap().send(String::from("exit")).unwrap();
+        self.result_receiver.take().unwrap();
         self.join_handle.take().unwrap().join().unwrap();
-        self.join_handle = None;
     }
 }

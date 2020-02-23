@@ -155,12 +155,10 @@ impl Communication {
     }
 
     /// Shuts down the communication thread and the connection to the drone
-    pub fn shutdown_connection(mut self) {
-        let sender = self.command_channel.unwrap();
+    pub fn shutdown_connection(&mut self) {
+        let sender = self.command_channel.take().unwrap();
         sender.send((String::from("exit"), Vec::new())).unwrap();
-        self.command_channel = None;
         self.connection_thread.take().unwrap().join().unwrap();
-        self.connection_thread = None;
     }
 
     pub fn get_ctl_tcp_connection(&self) -> Result<TcpStream, String> {

@@ -25,16 +25,20 @@ pub struct Drone {
     i_config: internal_config::InternalConfig,
 }
 
-pub fn get_drone() -> Drone {
-    return Drone {
-        communication: communication::get_default_settings(),
-        navdata: navdata::get_default_settings(),
-        config: droneconfig::get_default_settings(),
-        i_config: internal_config::get_default_settings(),
-    }
-}
-
 impl Drone {
+    /// Returns a Drone object with default settings.
+    pub fn new() -> Drone {
+        Drone {
+            communication: communication::get_default_settings(),
+            navdata: navdata::get_default_settings(),
+            config: droneconfig::get_default_settings(),
+            i_config: internal_config::get_default_settings(),
+        }
+
+    }
+
+    /// Initializes connection to the drone, starts navdata, control, and config
+    /// threads. Sends basic commands to the drone to initialize it.
     pub fn startup(&mut self) -> Result<(), String> {
         if !self.communication.try_connection() {
             return Err(String::from("Drone is not online!"));
@@ -64,7 +68,7 @@ impl Drone {
         Ok(())
     }
 
-    pub fn shutdown(self) {
+    fn shutdown(&mut self) {
         self.navdata.stop_navdata_listening_thread();
         self.config.stop_config_listening_thread();
         self.communication.shutdown_connection();
@@ -89,7 +93,7 @@ impl Drone {
         );
     }
 
-    /// Sorry, move was a keyword so I couldn't set it as a method name
+    /// The most basic move command.
     /// Parameters: Speed from left ([-1.0, 0.0)) to right ((0.0, 1.0]) or none (0.0)
     /// Speed from back ([-1.0, 0.0)) to front ((0.0, 1.0]) or none (0.0)
     /// Speed from down ([-1.0, 0.0)) to up ((0.0, 1.0]) or none (0.0)
@@ -166,7 +170,7 @@ impl Drone {
         self.mov(0.0, 0.0, 0.0, 0.0);
     }
 
-    /// Same a hover
+    /// Same as hover
     pub fn stop(&mut self) {
         self.hover();
     }
@@ -253,18 +257,21 @@ impl Drone {
         self.mov(0.0, 0.0, 0.0, -turn_rate);
     }
 
+    /// Makes the drone take off
     /// Message conforms SDK documentation
     /// 290718208=10001010101000000001000000000
     pub fn takeoff(&mut self) {
         self.communication.command("REF", vec![String::from("290718208")]);
     }
 
+    /// Makes the drone land
     /// Message conforms SDK documentation
     /// 290717696=10001010101000000000000000000
     pub fn land(&mut self) {
         self.communication.command("REF", vec![String::from("290717696")]);
     }
 
+    /// Resets the drone in case the last landing was crashlanding.
     /// Message conforms SDK documentation
     /// 290717952=10001010101000000000100000000
     pub fn reset(&mut self) {
@@ -296,29 +303,29 @@ impl Drone {
     ///
     /// All values should be between in [0, 1023], use at
     pub fn manual_engine(&mut self, fl: u32, fr: u32, rl: u32, rr: u32) {
-       let mut fl = fl; 
-       if fl > 1023 {
+        let mut fl = fl; 
+        if fl > 1023 {
             fl = 1023;
-       }
-       let mut fr = fr; 
-       if fr > 1023 {
+        }
+        let mut fr = fr; 
+        if fr > 1023 {
             fr = 1023;
-       }
-       let mut rl = rl; 
-       if rl > 1023 {
+        }
+        let mut rl = rl; 
+        if rl > 1023 {
             rl = 1023;
-       }
-       let mut rr = rr; 
-       if rr > 1023 {
+        }
+        let mut rr = rr; 
+        if rr > 1023 {
             rr = 1023;
-       }
+        }
 
-       self.communication.command("PWM", vec![
-            format_int(fl as i32),
-            format_int(fr as i32),
-            format_int(rl as i32),
-            format_int(rr as i32)
-       ])
+        self.communication.command("PWM", vec![
+                                   format_int(fl as i32),
+                                   format_int(fr as i32),
+                                   format_int(rl as i32),
+                                   format_int(rr as i32)
+        ])
     }
 
     /// This makes the drone fly around and follow 2D tags detected by it's camera
@@ -372,7 +379,7 @@ impl Drone {
                                    format!("\"{}\"", config_value)
                                    ]);
     }
-    
+
     /// Same as set_config but this uses &str for config_value
     pub fn set_config_str(&mut self, config_name: &str, config_value: &str) {
         // self.send_config_ids();
@@ -421,13 +428,13 @@ impl Drone {
     pub fn set_hd_video_stream(&mut self) {
         self.set_video_codec(VideoCodec::H264_720p);
     }
-    
+
     /// Stream (UDP 5555) will be in SD (H264_360p) and there will be nothing
     /// sent to the recording port (TCP 5553)
     pub fn set_sd_video_stream(&mut self) {
         self.set_video_codec(VideoCodec::H264_360p);
     }
-    
+
     /// Stream (UDP 5555) will be in SD (MP4_360p) and there will be nothing
     /// sent to the recording port (TCP 5553)
     pub fn set_mp4_video_stream(&mut self) {
@@ -439,7 +446,7 @@ impl Drone {
     pub fn set_hd_video_capture(&mut self) {
         self.set_video_codec(VideoCodec::MP4_360pH264_720p);
     }
-    
+
     /// Stream (UDP 5555) will be in SD (MP4_360p) and a SD (H264_360p) capture 
     /// will be sent to the recording port (TCP 5553)
     pub fn set_sd_video_capture(&mut self) {
@@ -470,14 +477,20 @@ impl Drone {
     pub fn use_front_cam(&mut self) {
         self.set_config_str("video:video_channel", "0");
     }
-    
+
     /// Tells the drone to use it's ground cam, for recording and streaming
     pub fn use_ground_cam(&mut self) {
         self.set_config_str("video:video_channel", "1");
     }
-    
+
     /// Get Navdata from the drone (currently only supports DEMO mode)
     pub fn get_navdata(&mut self, name: &str) -> Option<navdata::NavDataValue> {
         self.navdata.get_navdata_str(name)
+    }
+}
+
+impl Drop for Drone {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
