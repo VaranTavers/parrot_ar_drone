@@ -22,22 +22,25 @@ pub struct InternalConfig {
     pub shutdown: bool
 }
 
-pub fn get_default_settings() -> InternalConfig {
-    return InternalConfig {
-        version: String::from("0.0.1 (2.1.4)"),
-        start_time: SystemTime::now(),
-        show_commands: true,
-        debug: true,
-        stop_on_com_loss: false,
-        speed: 0.2,
-        value_correction: false,
-        self_rotation: 0.0185,
-        navdata_process: String::new(),
-        video_process: String::new(),
-        v_decode_process: String::new(),
-        network_suicide: false,
-        recieve_data_running: false,
-        send_config_running: false,
-        shutdown: false
+impl InternalConfig {
+    /// Returns a default set of internal configs
+    pub fn new() -> InternalConfig {
+        return InternalConfig {
+            version: String::from("0.0.1 (2.1.4)"),
+            start_time: SystemTime::now(),
+            show_commands: true,
+            debug: true,
+            stop_on_com_loss: false,
+            speed: 0.2,
+            value_correction: false,
+            self_rotation: 0.0185,
+            navdata_process: String::new(),
+            video_process: String::new(),
+            v_decode_process: String::new(),
+            network_suicide: false,
+            recieve_data_running: false,
+            send_config_running: false,
+            shutdown: false
+        }
     }
 }

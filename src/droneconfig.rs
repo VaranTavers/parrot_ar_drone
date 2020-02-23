@@ -16,20 +16,6 @@ pub struct DroneConfig {
     join_handle: Option<thread::JoinHandle<()>>,
 }
 
-pub fn get_default_settings() -> DroneConfig {
-    return DroneConfig {
-        config_data: Vec::new(),
-        config_sending: false,
-        session_id: String::from("03016321"),
-        user_id: String::from("0a100407"),
-        application_id: String::from("03016321"),
-        send_config_save_mode: false,
-        command_sender: None,
-        result_receiver: None,
-        join_handle: None,
-    };
-}
-
 fn get_config_thread(op_stream: Option<TcpStream>,
                      command_receiver: Receiver<String>,
                      result_sender: Sender<Option<String>>) {
@@ -74,6 +60,21 @@ fn get_config_thread(op_stream: Option<TcpStream>,
 }
 
 impl DroneConfig {
+    /// Returns a DroneConfig object with default settings
+    pub fn new() -> DroneConfig {
+        return DroneConfig {
+            config_data: Vec::new(),
+            config_sending: false,
+            session_id: String::from("03016321"),
+            user_id: String::from("0a100407"),
+            application_id: String::from("03016321"),
+            send_config_save_mode: false,
+            command_sender: None,
+            result_receiver: None,
+            join_handle: None,
+        };
+    }
+
     pub fn get_config(&mut self, name: String) -> Option<String> {
         let cmd_sender = self.command_sender.take().unwrap();
         cmd_sender.send(name).unwrap();
@@ -99,8 +100,8 @@ impl DroneConfig {
         self.result_receiver = Some(r_r);
         self.join_handle = Some(thread::spawn(move || {
             get_config_thread(Some(tcp_stream),
-                              c_r,
-                              r_s);
+            c_r,
+            r_s);
         }));
     }
 

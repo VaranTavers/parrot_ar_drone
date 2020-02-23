@@ -29,10 +29,10 @@ impl Drone {
     /// Returns a Drone object with default settings.
     pub fn new() -> Drone {
         Drone {
-            communication: communication::get_default_settings(),
-            navdata: navdata::get_default_settings(),
-            config: droneconfig::get_default_settings(),
-            i_config: internal_config::get_default_settings(),
+            communication: communication::Communication::new(),
+            navdata: navdata::NavData::new(),
+            config: droneconfig::DroneConfig::new(),
+            i_config: internal_config::InternalConfig::new(),
         }
 
     }

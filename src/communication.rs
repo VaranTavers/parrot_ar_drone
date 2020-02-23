@@ -25,22 +25,6 @@ pub struct Communication {
     command_channel: Option<Sender<(String, Vec<String>)>>
 }
 
-/// Get a Communication struct with default settings, if you didn't do
-/// any fancy shenanigans with the drones settings, this should be enough
-/// for you.
-pub fn get_default_settings() -> Communication {
-    return Communication {
-        drone_ip: String::from("192.168.1.1"),
-        nav_data_port: 5554,
-        video_port: 5555,
-        cmd_port: 5556,
-        ctl_port: 5559,
-        rec_port: 5553,
-        connection_thread: None,
-        command_channel: None
-    };
-}
-
 fn format_command(
     command_num: usize,
     command: String,
@@ -87,6 +71,21 @@ fn communication_thread(socket: UdpSocket,
 }
 
 impl Communication {
+    /// Returns a Communication struct with default settings, if you didn't do
+    /// any fancy shenanigans with the drones settings, this should be enough
+    /// for you.
+    pub fn new() -> Communication {
+        return Communication {
+            drone_ip: String::from("192.168.1.1"),
+            nav_data_port: 5554,
+            video_port: 5555,
+            cmd_port: 5556,
+            ctl_port: 5559,
+            rec_port: 5553,
+            connection_thread: None,
+            command_channel: None
+        };
+    }
     /// Tries connecting to the drone (may hang on routers which have the
     /// drones ip (default 192.168.1.1)
     pub fn try_connection(&self) -> bool {
@@ -172,7 +171,7 @@ impl Communication {
             }
         }
     }
-    
+
     pub fn get_navdata_udp_connection(&self) -> Result<UdpSocket, String> {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.nav_data_port))
             .expect("couldn't bind to address");
@@ -187,7 +186,7 @@ impl Communication {
             }
         }
     }
-    
+
     pub fn get_video_udp_connection(&self) -> Result<UdpSocket, String> {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.video_port))
             .expect("couldn't bind to address");
@@ -202,7 +201,7 @@ impl Communication {
             }
         }
     }
-    
+
     pub fn get_record_tcp_connection(&self) -> Result<TcpStream, String> {
         let socket = TcpStream::connect(format!("{}:{}", self.drone_ip, self.rec_port)) ;
         match socket {

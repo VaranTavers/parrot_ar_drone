@@ -35,24 +35,9 @@ pub struct NavData {
     join_handle: Option<thread::JoinHandle<()>>,
 }
 
-pub fn get_default_settings() -> NavData {
-    return NavData {
-        navdata: String::new(),
-        state: vec![32; 0],
-        navdata_count: 0,
-        navdata_timestamp: 0,
-        navdata_decoding_time: 0.0,
-        no_navdata: false,
-        command_sender: None,
-        result_receiver: None,
-        join_handle: None,
-    };
-}
-
-
 fn decode_id0<'a, I: AsRef<[u8]>>(crs: &mut Cursor<I>,
-                     options_map: &mut HashMap<String, NavDataValue>,
-                     print_error: bool) {
+                                  options_map: &mut HashMap<String, NavDataValue>,
+                                  print_error: bool) {
     let size = crs.read_u16::<LittleEndian>().unwrap(); 
     if size != 148 && print_error {
         println!("Navdata-Demo-Packet has wrong size: {}", size);
@@ -185,6 +170,22 @@ fn get_navdata_thread(op_stream: Option<UdpSocket>,
 }
 
 impl NavData {
+    /// Returns a NavData object with default settings
+    pub fn new() -> NavData {
+        return NavData {
+            navdata: String::new(),
+            state: vec![32; 0],
+            navdata_count: 0,
+            navdata_timestamp: 0,
+            navdata_decoding_time: 0.0,
+            no_navdata: false,
+            command_sender: None,
+            result_receiver: None,
+            join_handle: None,
+        };
+    }
+
+
     pub fn get_navdata(&mut self, name: String) -> Option<NavDataValue> {
         let cmd_sender = self.command_sender.take().unwrap();
         cmd_sender.send(name).unwrap();
