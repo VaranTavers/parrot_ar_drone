@@ -38,9 +38,19 @@ pub struct NavData {
 fn decode_id0<'a, I: AsRef<[u8]>>(crs: &mut Cursor<I>,
                                   options_map: &mut HashMap<String, NavDataValue>,
                                   print_error: bool) {
-    let size = crs.read_u16::<LittleEndian>().unwrap(); 
+    let size;
+    match crs.read_u16::<LittleEndian>() {
+        Ok(a) => {
+            size = a;
+        }
+        Err(e) => {
+            println!("Error: {}", e);
+            return;
+        }
+    }
     if size != 148 && print_error {
         println!("Navdata-Demo-Packet has wrong size: {}", size);
+        return;
     }
     let flags = crs.read_u32::<LittleEndian>().unwrap();
     options_map.insert(String::from("demo_default"), NavDataValue::Bool(flags >> 15 & 1 == 1));
