@@ -4,6 +4,7 @@ mod droneconfig;
 mod internal_config;
 mod format;
 
+pub use navdata::*;
 pub use format::*;
 pub use communication::*;
 pub use internal_config::*;
@@ -18,6 +19,7 @@ pub enum VideoCodec {
     H264_720p,
 }
 
+/// This is the main component you can access/control everything from here.
 pub struct Drone {
     communication: communication::Communication,
     navdata: navdata::NavData,
@@ -39,6 +41,18 @@ impl Drone {
 
     /// Initializes connection to the drone, starts navdata, control, and config
     /// threads. Sends basic commands to the drone to initialize it.
+    /// ```
+    /// use parrot_ar_drone::*;
+    ///
+    /// fn main() {
+    ///     let mut drone = Drone::new();
+    ///
+    ///     drone.startup();
+    ///
+    ///     // Commands...
+    /// }
+    ///
+    /// ```
     pub fn startup(&mut self) -> Result<(), String> {
         if !self.communication.try_connection() {
             return Err(String::from("Drone is not online!"));
@@ -68,13 +82,15 @@ impl Drone {
         Ok(())
     }
 
+    /// Shuts down the listening threads, and the control threads.
     fn shutdown(&mut self) {
         self.navdata.stop_navdata_listening_thread();
         self.config.stop_config_listening_thread();
         self.communication.shutdown_connection();
     }
 
-    /// Tells the drone that it is horizontal (parallel to the ground)
+    /// Tells the drone that it is horizontal (parallel to the ground).
+    /// 
     /// Do this only when the drone is on the ground!
     pub fn trim(&mut self) {
         self.communication.command("FTRIM", Vec::new());
@@ -94,9 +110,13 @@ impl Drone {
     }
 
     /// The most basic move command.
+    ///
     /// Parameters: Speed from left ([-1.0, 0.0)) to right ((0.0, 1.0]) or none (0.0)
+    ///
     /// Speed from back ([-1.0, 0.0)) to front ((0.0, 1.0]) or none (0.0)
+    ///
     /// Speed from down ([-1.0, 0.0)) to up ((0.0, 1.0]) or none (0.0)
+    ///
     /// Turn rate from left ([-1.0, 0.0)) to right ((0.0, 1.0]) or none (0.0)
     pub fn mov(&mut self, left_right: f32, back_front: f32, down_up: f32, turn_left_right: f32) {
         let mut l_r = left_right;
@@ -176,73 +196,84 @@ impl Drone {
     }
 
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
+    ///
     /// If you want to use the drones default speed use move_right()
     pub fn mov_right(&mut self, speed: f32) {
         self.mov(speed, 0.0, 0.0, 0.0);
     }
 
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
+    ///
     /// If you want to use the drones default speed use move_left()
     pub fn mov_left(&mut self, speed: f32) {
         self.mov(-speed, 0.0, 0.0, 0.0);
     }
 
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
+    ///
     /// If you want to use the drones default speed use move_forward()
     pub fn mov_forward(&mut self, speed: f32) {
         self.mov(0.0, speed, 0.0, 0.0);
     }
 
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
+    ///
     /// If you want to use the drones default speed use move_backward()
     pub fn mov_backward(&mut self, speed: f32) {
         self.mov(0.0, -speed, 0.0, 0.0);
     }
 
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
+    ///
     /// If you want to use the drones default speed use move_up()
     pub fn mov_up(&mut self, speed: f32) {
         self.mov(0.0, 0.0, speed, 0.0);
     }
 
     /// This method requires explicit speed to be given to it from [-1.0, 1.0]
+    ///
     /// If you want to use the drones default speed use move_down()
     pub fn mov_down(&mut self, speed: f32) {
         self.mov(0.0, 0.0, -speed, 0.0);
     }
 
     /// This method uses the drones default speed
+    ///
     /// If you want to give an explicit speed use move_right()
     pub fn move_right(&mut self) {
         self.mov(self.i_config.speed, 0.0, 0.0, 0.0);
     }
 
     /// This method uses the drones default speed
+    ///
     /// If you want to give an explicit speed use mov_left()
     pub fn move_left(&mut self) {
         self.mov(-self.i_config.speed, 0.0, 0.0, 0.0);
     }    
 
     /// This method uses the drones default speed
-    /// If you want to give an explicit speed use mov_left()
+    ///
+    /// If you want to give an explicit speed use mov_forward()
     pub fn move_forward(&mut self) {
         self.mov(0.0, self.i_config.speed, 0.0, 0.0);
     }
 
     /// This method uses the drones default speed
-    /// If you want to give an explicit speed use mov_left()
+    ///
+    /// If you want to give an explicit speed use mov_backward()
     pub fn move_backward(&mut self) {
         self.mov(0.0, -self.i_config.speed, 0.0, 0.0);
     }
 
     /// This method uses the drones default speed
-    /// If you want to give an explicit speed use mov_left()
+    /// If you want to give an explicit speed use mov_up()
     pub fn move_up(&mut self) {
         self.mov(0.0, 0.0, self.i_config.speed, 0.0);
     }
 
     /// This method uses the drones default speed
-    /// If you want to give an explicit speed use mov_left()
+    ///
+    /// If you want to give an explicit speed use mov_down()
     pub fn move_down(&mut self) {
         self.mov(0.0, 0.0, -self.i_config.speed, 0.0);
     }
@@ -258,21 +289,54 @@ impl Drone {
     }
 
     /// Makes the drone take off
+    ///
     /// Message conforms SDK documentation
+    ///
     /// 290718208=10001010101000000001000000000
+    ///
+    /// Initializes connection to the drone, starts navdata, control, and config
+    /// threads. Sends basic commands to the drone to initialize it.
+    /// ```
+    /// use parrot_ar_drone::*;
+    /// use time::Duration;
+    /// use thread;
+    ///
+    /// fn main() {
+    ///     let mut drone = Drone::new();
+    ///
+    ///     drone.startup();
+    ///     drone.takeoff();
+    ///
+    ///     thread::sleep(Duration::from_secs(5))
+    ///
+    ///     drone.mov_forward(0.5);
+    ///     thread::sleep(Duration::from_secs(2))
+    ///     drone.hover();
+    ///
+    ///     thread::sleep(Duration::from_secs(5))
+    ///
+    ///     drone.land();
+    ///     drone.shutdown();
+    /// }
+    ///
+    /// ```
     pub fn takeoff(&mut self) {
         self.communication.command("REF", vec![String::from("290718208")]);
     }
 
     /// Makes the drone land
+    ///
     /// Message conforms SDK documentation
+    ///
     /// 290717696=10001010101000000000000000000
     pub fn land(&mut self) {
         self.communication.command("REF", vec![String::from("290717696")]);
     }
 
     /// Resets the drone in case the last landing was crashlanding.
+    ///
     /// Message conforms SDK documentation
+    ///
     /// 290717952=10001010101000000000100000000
     pub fn reset(&mut self) {
         self.communication.command("REF", vec![String::from("290717952")]);
@@ -338,6 +402,7 @@ impl Drone {
     }
 
     /// Set the default seed of the drone that will be used in the move functions.
+    ///
     /// This value should be in the [0, 1.0] range 
     pub fn set_speed(&mut self, speed: f32) {
         if speed.abs() > 1.0 {
@@ -354,7 +419,9 @@ impl Drone {
     }
 
     /// This function doesn't guarantee that the config read is up to date!
+    ///
     /// To be sure please use the update_config function before this and
+    ///
     /// wait a little, to give time to the config thread to process the changes
     pub fn get_offline_config(&mut self, config_name: &str) -> Option<String> {
         self.config.get_config_str(config_name)
@@ -370,6 +437,7 @@ impl Drone {
     }
 
     /// This function sends a config to the drone, however it does not check if
+    ///
     /// the drone has gotten the command or not.
     pub fn set_config(&mut self, config_name: &str, config_value: String) {
         // self.send_config_ids();
